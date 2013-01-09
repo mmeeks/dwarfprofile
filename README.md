@@ -7,5 +7,8 @@ Dependencies
 ============
 
 openSUSE:
-	sudo zypper in libdwarf-devel libelf-devel
+	sudo zypper in libdw-devel libelf-devel
+
+Fedora:
+	sudo yum install elfutils-libelf-devel elfutils-libelf elfutils-libs elfutils-devel
 
