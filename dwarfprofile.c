@@ -1,7 +1,6 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-// dwarffuncs.c - Get some size statistics about (inlined) functions.
-// gcc -Wall -g -O2 -ldw -o dwarffuncs dwarffuncs.c
+// dwarfprofile.c - Get some size statistics about (inlined) functions.
 //
 // Copyright (C) 2013, Mark J. Wielaard  <mark@klomp.org>
 //
