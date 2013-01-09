@@ -35,7 +35,7 @@ func_size (Dwarf_Die *func)
       // Also handles lowpc plus highpc as special one range case.
       off = dwarf_ranges (func, off, &base, &begin, &end);
       if (off > 0)
-	size += (end - begin);
+        size += (end - begin);
     }
   while (off > 0);
 
@@ -67,11 +67,11 @@ print_inlined (Dwarf_Die *instance)
   ptrdiff_t size = func_size (instance);
 
   if (dwarf_formudata (dwarf_attr (instance, DW_AT_call_file, &attr_mem),
-		       &value) == 0)
+                       &value) == 0)
     file = dwarf_filesrc (files, value, NULL, NULL);
 
   if (dwarf_formudata (dwarf_attr (instance, DW_AT_call_line, &attr_mem),
-		       &value) == 0)
+                       &value) == 0)
     line = value;
 
   printf ("[%" PRIx64 "] %s:%s:%d (%td)", dieoff, name, file, line, size);
@@ -130,38 +130,37 @@ walk_func (Dwarf_Die *func, int indent)
     {
       int tag = dwarf_tag (&child);
       switch (tag)
-	{
-	case DW_TAG_subprogram:
-	  {
-	    // recurses itself.
-	    handle_function (&child, indent + 1);
-	    break;
-	  }
+        {
+        case DW_TAG_subprogram:
+          {
+            // recurses itself.
+            handle_function (&child, indent + 1);
+            break;
+          }
 
-	case DW_TAG_inlined_subroutine:
-	  {
-	    printf ("%*sinlined ", indent + 1, "");
-	    print_func (&child);
-	    printf ("\n");
-	    walk_func (&child, indent + 1);
-	    break;
-	  }
+        case DW_TAG_inlined_subroutine:
+          {
+            printf ("%*sinlined ", indent + 1, "");
+            print_func (&child);
+            printf ("\n");
+            walk_func (&child, indent + 1);
+            break;
+          }
 
-	default:
-	  {
-	    // Something unrecognized that still has a code size?
-	    ptrdiff_t size = func_size (&child);
-	    if (size > 0)
-	      {
-		printf ("%*sunknown_%x ", indent + 1, "", tag);
-		print_func (&child);
-		printf ("\n");
-	      }
-	    walk_func (&child, indent + 1);
-	  }
-
-	  // XXX DW_TAG_imported_unit hohum....
-	}
+        default:
+          {
+            // Something unrecognized that still has a code size?
+            ptrdiff_t size = func_size (&child);
+            if (size > 0)
+              {
+                printf ("%*sunknown_%x ", indent + 1, "", tag);
+                print_func (&child);
+                printf ("\n");
+              }
+            walk_func (&child, indent + 1);
+          }
+          // XXX DW_TAG_imported_unit hohum....
+        }
     }
   while (dwarf_siblingof (&child, &child) == 0);
 }
@@ -201,9 +200,9 @@ handle_cu (Dwarf_Die *cu)
     error (-1, 0, "dwarf_getsrcfiles: %s\n", dwarf_errmsg (-1));
 
   ptrdiff_t off = 0;
-  do
+  do {
     off = dwarf_getfuncs (cu, handle_func, NULL, off);
-  while (off > 0);
+  } while (off > 0);
 
   if (off < 0)
     error (-1, off, "dwarf_getfuncs: %s\n", dwarf_errmsg (-1));
