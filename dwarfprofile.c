@@ -1,12 +1,15 @@
 /* -*- Mode: C; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- */
 
-// dwarfprofile.c - Get some size statistics about (inlined) functions.
-//
-// Copyright (C) 2013, Mark J. Wielaard  <mark@klomp.org>
-//
-// This file is free software.  You can redistribute it and/or modify
-// it under the terms of the GNU General Public License (GPL); either
-// version 3, or (at your option) any later version.
+/*
+ * dwarfprofile.c - produce a callgrind tree of size information from
+ * a set of dwarf data for a binary.
+ *
+ * Copyright (C) 2013, Mark J. Wielaard  <mark@klomp.org>
+ *
+ * This file is free software.  You can redistribute it and/or modify
+ * it under the terms of the GNU General Public License (GPL); either
+ * version 3, or (at your option) any later version.
+ */
 
 #include <argp.h>
 #include <inttypes.h>
