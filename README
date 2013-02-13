@@ -19,3 +19,13 @@ openSUSE:
 Fedora:
 	sudo yum install elfutils-libelf-devel elfutils-libelf elfutils-libs elfutils-devel
 
+
+Callgrind format
+================
+
+Some rough notes on the callgrind format. Details and examples are here:
+	http://valgrind.org/docs/manual/cl-format.html
+
+The 'main' function is magic for kcachegrind it seems; so we need to
+rename existing 'main' functions and insert a top-level to which
+everything belongs.
