@@ -50,6 +50,16 @@ static bool show_die_offset = false;
 // File strings cache for the current CU.
 static Dwarf_Files *files;
 
+// For aggregating sizes of all top-levels
+struct _child_entry {
+  char *file;
+  char *name;
+  Dwarf_Word child_size;
+  struct _child_entry *next;
+};
+typedef struct _child_entry child_entry;
+static child_entry *main_children = NULL;
+
 static struct argp argp;
 
 static char *
@@ -59,6 +69,11 @@ escape_name(const char *fname)
   char *escaped;
   if (!fname)
     return NULL;
+
+  // We have a pseudo-main that contains all the data
+  if (!strcmp(fname, "main"))
+    return strdup ("__main__");
+
   escaped = malloc(strlen(fname) + 1);
   for (i = 0; fname[i]; i++)
     {
@@ -633,6 +648,18 @@ walk_children (Dwarf_Die *die, int indent)
 		output_die_end (&what, &where, children_size, indent);
 	      else
 		total += children_size;
+
+	      if (indent == 3) // XXX - ultra lame top-level-ness test.
+		{
+		  /* store record for our top-level / outer wrapper */
+		  child_entry *entry = malloc (sizeof (child_entry));
+		  entry->file = strdup (what.file);
+		  entry->name = strdup (what.name);
+		  entry->child_size = total;
+
+		  entry->next = main_children;
+		  main_children = entry;
+		}
 	    }
 
 	  if (what.file)
@@ -714,7 +741,6 @@ output_module_begin (const char *name)
 {
   if (generate_cpf | generate_fcpf)
     {
-      // XXX Anything?
     }
   else if (generate_xml)
     {
@@ -729,7 +755,24 @@ output_module_end (const char *name)
 {
   if (generate_cpf | generate_fcpf)
     {
-      // XXX Anything?
+      printf ("fl=outer-wrapper\n");
+      printf ("fn=main\n");
+      child_entry *it, *next;
+      Dwarf_Word children_size = 0;
+      for (it = main_children; it; it = next)
+	{
+	  printf ("cfl=%s\n", it->file);
+	  printf ("cfn=%s\n", it->name);
+	  printf ("calls=1\n");
+	  printf ("1 %ld\n", (long)it->child_size);
+	  children_size += it->child_size;
+
+	  next = it->next;
+	  free (it->file);
+	  free (it->name);
+	  free (it);
+	}
+      printf ("1 0");// (long) children_size);
     }
   else if (generate_xml)
     {
