@@ -294,6 +294,22 @@ DIE_what_where_size (Dwarf_Die *die,
   return size;
 }
 
+static char *
+escape_file(const char *fname)
+{
+  int i;
+  char *escaped = malloc(strlen(fname) + 1);
+  for (i = 0; fname[i]; i++)
+    {
+      if (fname[i] != '<' && fname[i] != '>')
+	escaped[i] = fname[i];
+      else
+	escaped[i] = '_';
+    }
+  escaped[i] = '\0';
+  return escaped;
+}
+
 /* Returns a hopefully unique identifier for what code is being used
    based on the definition tag, name, file, line and col if
    known. String has to be freed by caller. */
@@ -312,26 +328,28 @@ what_identifier_string (const struct what_info *what)
     {
       if (file != NULL)
 	{
+	  char *escaped_file = escape_file(file);
 	  if (line != 0)
 	    {
 	      if (col != 0)
 		{
 		  if (asprintf (&res, "%s:%s:%s:%d:%d", TAG_name (tag),
-				name, file, line, col) < 0)
+				name, escaped_file, line, col) < 0)
 		    res = NULL;
 		}
 	      else
 		{
 		  if (asprintf (&res, "%s:%s:%s:%d", TAG_name (tag),
-				name, file, line) < 0)
+				name, escaped_file, line) < 0)
 		    res = NULL;
 		}
 	    }
 	  else
 	    {
-	      if (asprintf (&res, "%s:%s:%s", TAG_name (tag), name, file) < 0)
+	      if (asprintf (&res, "%s:%s:%s", TAG_name (tag), name, escaped_file) < 0)
 		res = NULL;
 	    }
+	  free (escaped_file);
 	}
       else
 	{
@@ -342,7 +360,7 @@ what_identifier_string (const struct what_info *what)
   else
     {
       // No name, use DIE offset to generate something (possibly non-unique).
-      if (asprintf (&res, "%s_%#lx", TAG_name (tag), die_off) < 0)
+      if (asprintf (&res, "%s_%#lx", TAG_name (tag), (long)die_off) < 0)
 	res = NULL;
     }
 
@@ -434,7 +452,7 @@ output_die_begin (struct what_info *what, struct where_info *where, int indent)
 	  // XXX crappy fake XML...
 	  printf ("<die");
 	  if (show_die_offset)
-	    printf (" off='%lx'", where->die_off);
+	    printf (" off='%lx'", (long)where->die_off);
 	  printf (" id='%s'\n", what_id);
 	  printf ("%*s    ", indent, "");
 	  printf (" what_tag='%s' what_file='%s' what_line='%d'"
@@ -451,11 +469,12 @@ output_die_begin (struct what_info *what, struct where_info *where, int indent)
 	    printf ("[%" PRIx64 "] ", where->die_off);
 
 	  if (what->die_off == where->die_off)
-	    printf ("%s (%ld)\n", what_id, where->size);
+	    printf ("%s (%ld)\n", what_id, (long)where->size);
 	  else
 	    {
 	      char *where_str = where_string (where);
-	      printf ("%s@%s (%ld)\n", what_id, where_str, where->size);
+	      printf ("%s@%s (%ld)\n", what_id, where_str,
+		      (long)where->size);
 	      free (where_str);
 	    }
 	}
@@ -488,7 +507,7 @@ output_die_end (struct what_info *what, struct where_info *where,
 	    fprintf (stderr, "WARNING: [%" PRIx64 "] %s"
 		     " has no line info.\n",
 		     what->die_off, what_identifier_string (what));
-	  printf ("%d %ld\n\n", what->line, where->size - children_size);
+	  printf ("%d %ld\n\n", what->line, (long)(where->size - children_size));
 	}
       else /* generate_cpf */
 	{
@@ -520,7 +539,7 @@ output_die_end (struct what_info *what, struct where_info *where,
 		  if (children_size == 0)
 		    {
 		      /* No embedded code/calls reported since begin. */
-		      printf ("%d %ld\n\n", what->line, where->size);
+		      printf ("%d %ld\n\n", what->line, (long)where->size);
 		    }
 		  else
 		    {
@@ -529,7 +548,7 @@ output_die_end (struct what_info *what, struct where_info *where,
 		      printf ("\nfl=%s\n", what->file);
 		      printf ("fn=%s\n", what->name);
 		      printf ("%d %ld\n\n", what->line,
-			      where->size - children_size);
+			      (long)(where->size - children_size));
 		    }
 		}
 	    }
@@ -540,20 +559,21 @@ output_die_end (struct what_info *what, struct where_info *where,
 	      printf ("cfl=%s\n", what->file);
 	      printf ("cfn=%s\n", what->name);
 	      printf ("calls=1 %d\n", what->line);
-	      printf ("%d %ld\n", where->line, where->size - children_size);
+	      printf ("%d %ld\n", where->line, (long)(where->size - children_size));
 	    }
 	}
     }
   else if (generate_xml)
     {
-      printf ("%*s<size children='%ld' total='%ld'>\n", indent + 1, "",
-	      children_size, where->size);
+      printf ("%*s<size children='%ld' total='%ld'/>\n", indent + 1, "",
+	      children_size, (long) where->size);
       printf ("%*s</die>\n", indent, "");
     }
   else
     {
       printf ("%*send %s (%ld,%ld)\n", indent, "",
-	      what_identifier_string (what), children_size, where->size);
+	      what_identifier_string (what),
+	      (long)children_size, (long)where->size);
     }
 }
 
