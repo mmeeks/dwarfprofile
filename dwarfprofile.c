@@ -655,7 +655,7 @@ walk_children (Dwarf_Die *die, int indent)
 		  child_entry *entry = malloc (sizeof (child_entry));
 		  entry->file = strdup (what.file);
 		  entry->name = strdup (what.name);
-		  entry->child_size = total;
+		  entry->child_size = children_size;
 
 		  entry->next = main_children;
 		  main_children = entry;
