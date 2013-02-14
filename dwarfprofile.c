@@ -52,6 +52,25 @@ static Dwarf_Files *files;
 
 static struct argp argp;
 
+static char *
+escape_name(const char *fname)
+{
+  int i;
+  char *escaped;
+  if (!fname)
+    return NULL;
+  escaped = malloc(strlen(fname) + 1);
+  for (i = 0; fname[i]; i++)
+    {
+      if (fname[i] != '<' && fname[i] != '>' && fname[i] != '&')
+	escaped[i] = fname[i];
+      else
+	escaped[i] = '_';
+    }
+  escaped[i] = '\0';
+  return escaped;
+}
+
 static error_t
 parse_opt (int key, char *arg, struct argp_state *state)
 {
@@ -205,7 +224,7 @@ struct what_info
   int tag;
   Dwarf_Off die_off;
   const char *name;
-  const char *file;
+  char *file;
   int line;
   int col;
 };
@@ -221,7 +240,7 @@ struct where_info
 {
   int tag;
   Dwarf_Off die_off;
-  const char *file;
+  char *file;
   int line;
   int col;
   Dwarf_Word size;
@@ -237,10 +256,12 @@ DIE_what_where_size (Dwarf_Die *die,
   if (size > 0)
     {
       Dwarf_Die *decl;
+      const char *what_file, *where_file;
+
       what->tag = DIE_decl_tag (die, &decl);
       what->die_off = dwarf_dieoffset (decl);
       what->name = dwarf_diename (die);
-      what->file = dwarf_decl_file (die);
+      what_file = dwarf_decl_file (die);
 
       what->line = 0;
       what->col = 0;
@@ -251,7 +272,7 @@ DIE_what_where_size (Dwarf_Die *die,
 	{
 	  where->tag = what->tag;
 	  where->die_off = what->die_off;
-	  where->file = what->file;
+	  where_file = what_file;
 	  where->line = what->line;
 	  where->col = what->col;
 	}
@@ -262,10 +283,10 @@ DIE_what_where_size (Dwarf_Die *die,
 
 	  Dwarf_Word value;
 	  Dwarf_Attribute attr_mem;
-	  where->file = what->file;
+	  where_file = what_file;
 	  if (dwarf_formudata (dwarf_attr (die, DW_AT_call_file, &attr_mem),
 			       &value) == 0)
-	    where->file = dwarf_filesrc (files, value, NULL, NULL);
+	    where_file = dwarf_filesrc (files, value, NULL, NULL);
 
 	  where->line = what->line;
 	  if (dwarf_formudata (dwarf_attr (die, DW_AT_call_line, &attr_mem),
@@ -283,31 +304,23 @@ DIE_what_where_size (Dwarf_Die *die,
 	     because all information can apparently be derived from
 	     the where. */
 	  if (where->tag == what->tag
-	      && where->file == what->file
+	      && where_file == what_file
 	      && where->line == what->line
 	      && where->col == what->col)
 	    what->die_off = where->die_off;
 
 	}
       where->size = size;
+      what->file = escape_name (what_file);
+      where->file = escape_name (where_file);
     }
-  return size;
-}
-
-static char *
-escape_file(const char *fname)
-{
-  int i;
-  char *escaped = malloc(strlen(fname) + 1);
-  for (i = 0; fname[i]; i++)
+  else
     {
-      if (fname[i] != '<' && fname[i] != '>')
-	escaped[i] = fname[i];
-      else
-	escaped[i] = '_';
+      what->file = NULL;
+      where->file = NULL;
     }
-  escaped[i] = '\0';
-  return escaped;
+
+  return size;
 }
 
 /* Returns a hopefully unique identifier for what code is being used
@@ -318,44 +331,44 @@ what_identifier_string (const struct what_info *what)
 {
   char *res;
   int tag = what->tag;
-  const char *name = what->name;
+  const char *orig_name = what->name;
   const char *file = what->file;
   int line = what->line;
   int col = what->col;
   Dwarf_Word die_off = what->die_off;
 
-  if (name != NULL)
+  if (orig_name != NULL)
     {
+      char *name = escape_name (orig_name);
       if (file != NULL)
 	{
-	  char *escaped_file = escape_file(file);
 	  if (line != 0)
 	    {
 	      if (col != 0)
 		{
 		  if (asprintf (&res, "%s:%s:%s:%d:%d", TAG_name (tag),
-				name, escaped_file, line, col) < 0)
+				name, file, line, col) < 0)
 		    res = NULL;
 		}
 	      else
 		{
 		  if (asprintf (&res, "%s:%s:%s:%d", TAG_name (tag),
-				name, escaped_file, line) < 0)
+				name, file, line) < 0)
 		    res = NULL;
 		}
 	    }
 	  else
 	    {
-	      if (asprintf (&res, "%s:%s:%s", TAG_name (tag), name, escaped_file) < 0)
+	      if (asprintf (&res, "%s:%s:%s", TAG_name (tag), name, file) < 0)
 		res = NULL;
 	    }
-	  free (escaped_file);
 	}
       else
 	{
 	  if (asprintf (&res, "%s:%s", TAG_name (tag), name) < 0)
 	    res = NULL;
 	}
+      free (name);
     }
   else
     {
@@ -566,7 +579,7 @@ output_die_end (struct what_info *what, struct where_info *where,
   else if (generate_xml)
     {
       printf ("%*s<size children='%ld' total='%ld'/>\n", indent + 1, "",
-	      children_size, (long) where->size);
+	      (long) children_size, (long) where->size);
       printf ("%*s</die>\n", indent, "");
     }
   else
@@ -621,6 +634,11 @@ walk_children (Dwarf_Die *die, int indent)
 	      else
 		total += children_size;
 	    }
+
+	  if (what.file)
+	    free (what.file);
+	  if (where.file)
+	    free (where.file);
 	}
       while (dwarf_siblingof (&child, &child) == 0);
     }
@@ -674,7 +692,7 @@ handle_cu (Dwarf_Die *cu)
   where.tag = what.tag = dwarf_tag (cu);
   where.die_off = what.die_off = dwarf_dieoffset (cu);
   what.name = short_name;
-  where.file = what.file = file;
+  where.file = what.file = escape_name (file);
   where.line = what.line = 0;
   where.col = what.col = 0;
   where.size = size;
