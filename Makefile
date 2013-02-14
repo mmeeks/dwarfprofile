@@ -10,7 +10,7 @@ qa : qa/small
 
 dwarfprofile : dwarfprofile.c
 	gcc -Wall -g `pkg-config --cflags --libs glib-2.0` \
-	    -O0 -ldw -o dwarfprofile dwarfprofile.c
+	    -O2 -ldw -o dwarfprofile dwarfprofile.c
 
 test: dwarfprofile qa
 	./dwarfprofile -e qa/small
