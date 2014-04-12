@@ -7,7 +7,8 @@
  * a De-Dwarfe'd C++ microcosm:
  */
 
-#include <list>
+#include <vector>
+#include <algorithm>
 #include <malloc.h>
 #include <assert.h>
 #include <string.h>
@@ -18,7 +19,7 @@ struct FileSystemNode {
     char           *mpName;
     FileSystemNode *mpParent;
 
-    typedef std::list< FileSystemNode * > ChildsType; // Hamburg nostalgia
+    typedef std::vector< FileSystemNode * > ChildsType; // Hamburg nostalgia
     ChildsType      maChildren;
 
     FileSystemNode (FileSystemNode *pParent,
@@ -123,6 +124,20 @@ struct FileSystemNode {
             (*it)->dumpAtDepth (nDepth-1);
         }
     }
+
+    static bool big_first (FileSystemNode *a, FileSystemNode *b)
+    {
+        return a->mnSize > b->mnSize;
+    }
+
+    void sortChildren()
+    {
+        std::sort (maChildren.begin(), maChildren.end(), big_first);
+
+        for (ChildsType::iterator it = maChildren.begin();
+             it != maChildren.end(); ++it)
+            (*it)->sortChildren();
+    }
 };
 
 FileSystemNode *FileSystemNode::gpRoot = NULL;
@@ -145,7 +160,9 @@ void register_file_span (const char *path, const char *func,
 
 void dump_results()
 {
-    for (int i = 6; i <= 12; i+= 2)
+    FileSystemNode::gpRoot->sortChildren();
+
+    for (int i = 4; i <= 12; i+= 2)
     {
         fprintf (stdout, "\n---\n\n Breakdown at depth %d\n\n\n", i);
         FileSystemNode::gpRoot->dumpAtDepth(i);
