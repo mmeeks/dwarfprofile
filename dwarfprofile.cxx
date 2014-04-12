@@ -48,16 +48,6 @@ static bool show_die_offset = false;
 // File strings cache for the current CU.
 static Dwarf_Files *files;
 
-// For aggregating sizes of all top-levels
-struct _child_entry {
-  char *file;
-  char *name;
-  Dwarf_Word child_size;
-  struct _child_entry *next;
-};
-typedef struct _child_entry child_entry;
-static child_entry *main_children = NULL;
-
 static struct argp argp;
 
 static char *
@@ -393,6 +383,7 @@ what_identifier_string (const struct what_info *what)
   return res;
 }
 
+#if 0
 /* Returns a string describing the location where a DIE was used.
    String has to be freed by caller. */
 static char *
@@ -435,6 +426,7 @@ where_string (const struct where_info *where)
 
   return res;
 }
+#endif
 
 /* We treat nested subprograms as "inlines", keep track of how deep we nest. */
 static int in_top_level_subprogram = 0;
@@ -576,7 +568,8 @@ output_die_end (struct what_info *what, struct where_info *where,
 		    {
 		      /* No embedded code/calls reported since begin. */
 //		      printf ("%d %ld\n\n", what->line, (long)where->size);
-		      register_file_span (what->file, what->line, where->col,
+		      register_file_span (what->file, what->name,
+					  what->line, where->col,
 					  where->size);
 		    }
 		  else
@@ -589,7 +582,8 @@ output_die_end (struct what_info *what, struct where_info *where,
 		      printf ("%d %ld\n\n", what->line,
 			      (long)(where->size - children_size));
 #endif
-		      register_file_span (what->file, what->line, where->col,
+		      register_file_span (what->file, what->name,
+					  what->line, where->col,
 					  where->size - children_size);
 		    }
 		}
@@ -604,7 +598,8 @@ output_die_end (struct what_info *what, struct where_info *where,
 	      printf ("calls=1 %d\n", what->line);
 	      printf ("%d %ld\n", where->line, (long)(where->size - children_size));
 #endif
-	      register_file_span (what->file, what->line, where->col,
+	      register_file_span (what->file, what->name,
+				  what->line, where->col,
 				  where->size - children_size);
 	    }
 	}
@@ -668,20 +663,6 @@ walk_children (Dwarf_Die *die, int indent)
 		output_die_end (&what, &where, children_size, indent);
 	      else
 		total += children_size;
-
-#if 0
-	      if (indent == 3) // XXX - ultra lame top-level-ness test.
-		{
-		  /* store record for our top-level / outer wrapper */
-		  child_entry *entry = (child_entry *)malloc (sizeof (child_entry));
-		  entry->file = strdup (what.file);
-		  entry->name = strdup (what.name);
-		  entry->child_size = children_size;
-
-		  entry->next = main_children;
-		  main_children = entry;
-		}
-#endif
 	    }
 
 	  if (what.file)

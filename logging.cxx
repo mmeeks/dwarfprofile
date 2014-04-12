@@ -91,10 +91,19 @@ struct FileSystemNode {
             mpParent->addSize (nSize);
     }
 
-    static void accumulate_size (const char *pName, int line, int col, size_t size)
+    static void accumulate_size (const char *pName, const char *pFunc,
+                                 int line, int col, size_t size)
     {
+        if (size == 0)
+        {
+// MJW - checkme - why is this zero so often ? ...
+//            fprintf (stderr, "odd zero size at '%s' '%s'\n", pName, pFunc);
+            return;
+        }
         (void)line; (void)col; // later
         FileSystemNode *pNode = getNode(pName);
+        if (pFunc)
+            pNode = pNode->lookupNode(pFunc, strlen(pFunc));
         pNode->addSize (size);
     }
 
@@ -125,13 +134,13 @@ register_compile_unit (const char *name, size_t size)
              name, (long)size);
 }
 
-void register_file_span (const char *name, int line, int col,
-                         size_t size)
+void register_file_span (const char *path, const char *func,
+                         int line, int col, size_t size)
 {
-    if (!name)
+    if (!path)
         return;
 
-    FileSystemNode::accumulate_size (name, line, col, size);
+    FileSystemNode::accumulate_size (path, func, line, col, size);
 }
 
 void dump_results()
