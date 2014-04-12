@@ -1,8 +1,6 @@
-/* gcc -Wall -g -O2 -ldw -o dwarfprofile dwarfprofile.c
- *
+/*
  * dwarfprofile.c - produce a tree of size information from a set of
  * dwarf data for a binary.
- *
  *
  * Copyright (C) 2013, Mark J. Wielaard  <mark@klomp.org>
  *
@@ -10,8 +8,6 @@
  * it under the terms of the GNU General Public License (GPL); either
  * version 3, or (at your option) any later version.
  */
-
-#define _GNU_SOURCE
 
 #include <argp.h>
 #include <error.h>
@@ -23,6 +19,8 @@
 #include <dwarf.h>
 #include <elfutils/libdw.h>
 #include <elfutils/libdwfl.h>
+
+#include <logging.hxx>
 
 // Older versions of elfutils/libdw dwarf.h don't define this one.
 #ifndef DW_TAG_GNU_call_site
@@ -74,7 +72,7 @@ escape_name(const char *fname)
   if (!strcmp(fname, "main"))
     return strdup ("__main__");
 
-  escaped = malloc(strlen(fname) + 1);
+  escaped = (char *)malloc(strlen(fname) + 1);
   for (i = 0; fname[i]; i++)
     {
       if (fname[i] != '<' && fname[i] != '>' && fname[i] != '&')
@@ -444,11 +442,13 @@ static int in_top_level_subprogram = 0;
 static void
 output_die_begin (struct what_info *what, struct where_info *where, int indent)
 {
+#if 0
   if (generate_fcpf)
     {
       // All is done in output_die_end.
     }
   else if (generate_cpf)
+#endif
     {
       /* We report "top-level" functions (subprograms), but don't yet
 	 report any actual bytes here. First we will report all
@@ -465,12 +465,15 @@ output_die_begin (struct what_info *what, struct where_info *where, int indent)
 		fprintf (stderr, "WARNING: [%" PRIx64 "] %s"
 			 " has no file.\n",
 			 what->die_off, what_identifier_string (what));
+#if 0
 	      else
 		printf ("fl=%s\n", what->file);
 	      printf ("fn=%s\n", what->name);
+#endif
 	    }
 	}
     }
+#if 0
   else
     {
       printf ("%*s", indent, "");
@@ -508,18 +511,22 @@ output_die_begin (struct what_info *what, struct where_info *where, int indent)
 	}
       free (what_id);
     }
+#endif
 }
 
 static void
 output_die_end (struct what_info *what, struct where_info *where,
 		Dwarf_Word children_size, int indent)
 {
+#if 0
   if (generate_cpf || generate_fcpf)
+#endif
     {
       /* Only report on "real" code. */
       if (what->tag == DW_TAG_compile_unit)
 	return;
 
+#if 0
       if (generate_fcpf)
 	{
 	  /* Report the size of what was included minus the size
@@ -538,6 +545,7 @@ output_die_end (struct what_info *what, struct where_info *where,
 	  printf ("%d %ld\n\n", what->line, (long)(where->size - children_size));
 	}
       else /* generate_cpf */
+#endif
 	{
 	  if (where->tag != DW_TAG_subprogram
 	      && in_top_level_subprogram == 0)
@@ -567,16 +575,22 @@ output_die_end (struct what_info *what, struct where_info *where,
 		  if (children_size == 0)
 		    {
 		      /* No embedded code/calls reported since begin. */
-		      printf ("%d %ld\n\n", what->line, (long)where->size);
+//		      printf ("%d %ld\n\n", what->line, (long)where->size);
+		      register_file_span (what->file, what->line, where->col,
+					  where->size);
 		    }
 		  else
 		    {
 		      /* Just report the file/function name again to avoid
 			 "confusion". */
+#if 0
 		      printf ("\nfl=%s\n", what->file);
 		      printf ("fn=%s\n", what->name);
 		      printf ("%d %ld\n\n", what->line,
 			      (long)(where->size - children_size));
+#endif
+		      register_file_span (what->file, what->line, where->col,
+					  where->size - children_size);
 		    }
 		}
 	    }
@@ -584,13 +598,18 @@ output_die_end (struct what_info *what, struct where_info *where,
 	  if (where->tag != DW_TAG_subprogram
 	      || in_top_level_subprogram > 0)
 	    {
+#if 0
 	      printf ("cfl=%s\n", what->file);
 	      printf ("cfn=%s\n", what->name);
 	      printf ("calls=1 %d\n", what->line);
 	      printf ("%d %ld\n", where->line, (long)(where->size - children_size));
+#endif
+	      register_file_span (what->file, what->line, where->col,
+				  where->size - children_size);
 	    }
 	}
     }
+#if 0
   else if (generate_xml)
     {
       printf ("%*s<size children='%ld' total='%ld'/>\n", indent + 1, "",
@@ -603,6 +622,7 @@ output_die_end (struct what_info *what, struct where_info *where,
 	      what_identifier_string (what),
 	      (long)children_size, (long)where->size);
     }
+#endif
 }
 
 /* Walks all (code) children of the given DIE and returns the total
@@ -649,10 +669,11 @@ walk_children (Dwarf_Die *die, int indent)
 	      else
 		total += children_size;
 
+#if 0
 	      if (indent == 3) // XXX - ultra lame top-level-ness test.
 		{
 		  /* store record for our top-level / outer wrapper */
-		  child_entry *entry = malloc (sizeof (child_entry));
+		  child_entry *entry = (child_entry *)malloc (sizeof (child_entry));
 		  entry->file = strdup (what.file);
 		  entry->name = strdup (what.name);
 		  entry->child_size = children_size;
@@ -660,6 +681,7 @@ walk_children (Dwarf_Die *die, int indent)
 		  entry->next = main_children;
 		  main_children = entry;
 		}
+#endif
 	    }
 
 	  if (what.file)
@@ -730,6 +752,7 @@ handle_cu (Dwarf_Die *cu)
 
   output_cu_begin (&what, &where);
   Dwarf_Word children_size = walk_children (cu, 3); // indent 3 (dp/mod/cu)
+
   output_cu_end (&what, &where, children_size);
 
   if (file != name)
@@ -739,47 +762,13 @@ handle_cu (Dwarf_Die *cu)
 static void
 output_module_begin (const char *name)
 {
-  if (generate_cpf | generate_fcpf)
-    {
-    }
-  else if (generate_xml)
-    {
-      printf (" <module name='%s'>\n", name);
-    }
-  else
-    printf (" module %s\n", name);
+  fprintf (stderr, "process '%s'\n", name);
 }
 
 static void
 output_module_end (const char *name)
 {
-  if (generate_cpf | generate_fcpf)
-    {
-      printf ("fl=outer-wrapper\n");
-      printf ("fn=main\n");
-      child_entry *it, *next;
-      Dwarf_Word children_size = 0;
-      for (it = main_children; it; it = next)
-	{
-	  printf ("cfl=%s\n", it->file);
-	  printf ("cfn=%s\n", it->name);
-	  printf ("calls=1\n");
-	  printf ("1 %ld\n", (long)it->child_size);
-	  children_size += it->child_size;
-
-	  next = it->next;
-	  free (it->file);
-	  free (it->name);
-	  free (it);
-	}
-      printf ("1 0");// (long) children_size);
-    }
-  else if (generate_xml)
-    {
-      printf (" <module name='%s'>\n", name);
-    }
-  else
-    printf (" module %s done\n", name);
+  fprintf (stderr, "... done\n");
 }
 
 static int
@@ -798,34 +787,8 @@ handle_module (Dwfl_Module *mod, void **userdata, const char *name,
 }
 
 void
-output_start ()
+output_paths ()
 {
-  if (generate_cpf || generate_fcpf)
-    {
-      printf ("version: 1\ncreator: dwarfprofile\n\n");
-      printf ("events: Bytes\n\n");
-    }
-  else if (generate_xml)
-    {
-      printf ("<dwarfprofile>\n");
-    }
-  else
-    printf ("dwarfprofile\n");
-}
-
-void
-output_end ()
-{
-  if (generate_cpf || generate_fcpf)
-    {
-      // XXX Anything?
-    }
-  else if (generate_xml)
-    {
-      printf ("</dwarfprofile>\n");
-    }
-  else
-    printf ("dwarfprofile done\n");
 }
 
 int
@@ -872,16 +835,17 @@ main (int argc, char **argv)
   if (e != 0 || dwfl == NULL)
     exit (-1);
 
-  output_start ();
   ptrdiff_t res = dwfl_getmodules (dwfl, handle_module, NULL, 0);
   if (res != 0) // We should handle all modules, anything else is an error
     {
       fprintf (stderr, "dwfl_getmodules failed: %s\n",  dwfl_errmsg (-1));
       exit (-1);
     }
-  output_end ();
+  output_paths ();
 
   dwfl_end (dwfl);
+
+  dump_results();
 
   return 0;
 }

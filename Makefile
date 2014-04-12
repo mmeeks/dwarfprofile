@@ -8,9 +8,9 @@ qa/small : qa/small.c
 
 qa : qa/small
 
-dwarfprofile : dwarfprofile.cxx
-	g++ -Wall -g `pkg-config --cflags --libs glib-2.0` \
-	    -O2 -ldw -o dwarfprofile dwarfprofile.cxx
+dwarfprofile : dwarfprofile.cxx logging.cxx logging.hxx
+	g++ -Wall -I. -g `pkg-config --cflags --libs glib-2.0` \
+	    -O0 -ldw -o dwarfprofile dwarfprofile.cxx logging.cxx
 
 test: dwarfprofile qa
 	./dwarfprofile -e qa/small
