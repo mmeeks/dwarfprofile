@@ -453,11 +453,11 @@ output_die_begin (struct what_info *what, struct where_info *where, int indent)
 	  in_top_level_subprogram++;
 	  if (in_top_level_subprogram == 1)
 	    {
+#if 0
 	      if (what->file == NULL)
 		fprintf (stderr, "WARNING: [%" PRIx64 "] %s"
 			 " has no file.\n",
 			 what->die_off, what_identifier_string (what));
-#if 0
 	      else
 		printf ("fl=%s\n", what->file);
 	      printf ("fn=%s\n", what->name);
