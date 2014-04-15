@@ -434,13 +434,6 @@ static int in_top_level_subprogram = 0;
 static void
 output_die_begin (struct what_info *what, struct where_info *where, int indent)
 {
-#if 0
-  if (generate_fcpf)
-    {
-      // All is done in output_die_end.
-    }
-  else if (generate_cpf)
-#endif
     {
       /* We report "top-level" functions (subprograms), but don't yet
 	 report any actual bytes here. First we will report all
@@ -453,180 +446,93 @@ output_die_begin (struct what_info *what, struct where_info *where, int indent)
 	  in_top_level_subprogram++;
 	  if (in_top_level_subprogram == 1)
 	    {
-#if 0
-	      if (what->file == NULL)
-		fprintf (stderr, "WARNING: [%" PRIx64 "] %s"
-			 " has no file.\n",
-			 what->die_off, what_identifier_string (what));
-	      else
-		printf ("fl=%s\n", what->file);
-	      printf ("fn=%s\n", what->name);
-#endif
 	    }
 	}
     }
-#if 0
-  else
-    {
-      printf ("%*s", indent, "");
-      char *what_id = what_identifier_string (what);
-      if (generate_xml)
-	{
-	  // XXX crappy fake XML...
-	  printf ("<die");
-	  if (show_die_offset)
-	    printf (" off='%lx'", (long)where->die_off);
-	  printf (" id='%s'\n", what_id);
-	  printf ("%*s    ", indent, "");
-	  printf (" what_tag='%s' what_file='%s' what_line='%d'"
-		  " what_col='%d'\n", TAG_name (what->tag),
-		  (what->file ?: ""), what->line, what->col);
-	  printf ("%*s    ", indent, "");
-	  printf (" where_tag='%s' where_file='%s' where_line='%d'"
-		  " where_col='%d'>\n", TAG_name (where->tag),
-		  (where->file ?: ""), where->line, where->col);
-	}
-      else
-	{
-	  if (show_die_offset)
-	    printf ("[%" PRIx64 "] ", where->die_off);
-
-	  if (what->die_off == where->die_off)
-	    printf ("%s (%ld)\n", what_id, (long)where->size);
-	  else
-	    {
-	      char *where_str = where_string (where);
-	      printf ("%s@%s (%ld)\n", what_id, where_str,
-		      (long)where->size);
-	      free (where_str);
-	    }
-	}
-      free (what_id);
-    }
-#endif
 }
 
 static void
-output_die_end (struct what_info *what, struct where_info *where,
+output_die_end (struct what_info *pwhat, struct where_info *pwhere,
+                struct what_info *what, struct where_info *where,
 		Dwarf_Word children_size, int indent)
 {
-#if 0
-  if (generate_cpf || generate_fcpf)
-#endif
+  {
+    /* Only report on "real" code. */
+    if (what->tag == DW_TAG_compile_unit)
+      return;
+
     {
-      /* Only report on "real" code. */
-      if (what->tag == DW_TAG_compile_unit)
-	return;
+      if (where->tag != DW_TAG_subprogram
+          && in_top_level_subprogram == 0)
+        {
+          fprintf (stderr,
+                   "WARNING: Cannot happen! Embedded code outside"
+                   " a subprogram %s\n",
+                   what_identifier_string (what));
+          return;
+        }
 
-#if 0
-      if (generate_fcpf)
-	{
-	  /* Report the size of what was included minus the size
-	     of any children reported to prevent double counting. */
-	  if (what->file == NULL)
-	    fprintf (stderr, "WARNING: [%" PRIx64 "] %s"
-		     " has no file.\n",
-		     what->die_off, what_identifier_string (what));
-	  else
-	    printf ("fl=%s\n", what->file);
-	  printf ("fn=%s\n", what->name);
-	  if (what->line == 0)
-	    fprintf (stderr, "WARNING: [%" PRIx64 "] %s"
-		     " has no line info.\n",
-		     what->die_off, what_identifier_string (what));
-	  printf ("%d %ld\n\n", what->line, (long)(where->size - children_size));
-	}
-      else /* generate_cpf */
-#endif
-	{
-	  if (where->tag != DW_TAG_subprogram
-	      && in_top_level_subprogram == 0)
-	    {
-	      fprintf (stderr,
-		       "WARNING: Cannot happen! Embedded code outside"
-		       " a subprogram %s\n",
-		       what_identifier_string (what));
-	      return;
-	    }
+      if (where->tag == DW_TAG_subprogram)
+        {
+          in_top_level_subprogram--;
+          if (in_top_level_subprogram < 0)
+            {
+              fprintf (stderr,
+                       "WARNING: Cannot happen! Unbalanced subprogram %s\n",
+                       what_identifier_string (what));
+              return;
+            }
 
-	  if (where->tag == DW_TAG_subprogram)
-	    {
-	      in_top_level_subprogram--;
-	      if (in_top_level_subprogram < 0)
-		{
-		  fprintf (stderr,
-			   "WARNING: Cannot happen! Unbalanced subprogram %s\n",
-			   what_identifier_string (what));
-		  return;
-		}
+          /* All other subprograms are treated like line inlined
+             subroutines below. */
+          if (in_top_level_subprogram == 0)
+            {
+              if (children_size == 0)
+                {
+                  /* No embedded code/calls reported since begin. */
+                  //	printf ("%d %ld\n\n", what->line, (long)where->size);
+                  register_file_span (what->file, what->name,
+                                      what->line, where->col,
+                                      where->size);
+                }
+              else
+                {
+                  /* Just report the file/function name again to avoid
+                     "confusion". */
+                  if (where->size < children_size) {
+                    fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n",
+                            where->size, children_size, where->tag, what->file, what->name);
+                  } else {
+                    register_file_span (what->file, what->name,
+                                        what->line, where->col,
+                                        where->size - children_size);
+                    }
+                }
+            }
+        }
 
-	      /* All other subprograms are treated like line inlined
-		 subroutines below. */
-	      if (in_top_level_subprogram == 0)
-		{
-		  if (children_size == 0)
-		    {
-		      /* No embedded code/calls reported since begin. */
-//		      printf ("%d %ld\n\n", what->line, (long)where->size);
-		      register_file_span (what->file, what->name,
-					  what->line, where->col,
-					  where->size);
-		    }
-		  else
-		    {
-		      /* Just report the file/function name again to avoid
-			 "confusion". */
-#if 0
-		      printf ("\nfl=%s\n", what->file);
-		      printf ("fn=%s\n", what->name);
-		      printf ("%d %ld\n\n", what->line,
-			      (long)(where->size - children_size));
-#endif
-                      if (where->size < children_size) {
-                        fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n", where->size, children_size, where->tag, what->file, what->name);
-                      } else {
-		      register_file_span (what->file, what->name,
-					  what->line, where->col,
-					  where->size - children_size);
-                      }
-		    }
-		}
-	    }
+      if (where->tag != DW_TAG_subprogram
+          || in_top_level_subprogram > 0)
+        {
+          if (where->size < children_size) {
+            fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n",
+                    where->size, children_size, where->tag, what->file, what->name);
+          } else {
+            if (where->tag == DW_TAG_lexical_block) {
+              /* use parents file and name for lexical blocks */
+              register_file_span (pwhat->file, pwhat->name,
+                                  what->line, where->col,
+                                  where->size - children_size);
+            } else {
 
-	  if (where->tag != DW_TAG_subprogram
-	      || in_top_level_subprogram > 0)
-	    {
-#if 0
-	      printf ("cfl=%s\n", what->file);
-	      printf ("cfn=%s\n", what->name);
-	      printf ("calls=1 %d\n", what->line);
-	      printf ("%d %ld\n", where->line, (long)(where->size - children_size));
-#endif
-                      if (where->size < children_size) {
-                        fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n", where->size, children_size, where->tag, what->file, what->name);
-                      } else {
-
-	      register_file_span (what->file, what->name,
-				  what->line, where->col,
-				  where->size - children_size);
-                      }
-	    }
-	}
+              register_file_span (what->file, what->name,
+                                  what->line, where->col,
+                                  where->size - children_size);
+            }
+          }
+        }
     }
-#if 0
-  else if (generate_xml)
-    {
-      printf ("%*s<size children='%ld' total='%ld'/>\n", indent + 1, "",
-	      (long) children_size, (long) where->size);
-      printf ("%*s</die>\n", indent, "");
-    }
-  else
-    {
-      printf ("%*send %s (%ld,%ld)\n", indent, "",
-	      what_identifier_string (what),
-	      (long)children_size, (long)where->size);
-    }
-#endif
+  }
 }
 
 /* Walks all (code) children of the given DIE and returns the total
@@ -637,6 +543,10 @@ walk_children (Dwarf_Die *die, int indent)
   Dwarf_Word total = 0;
   if (! dwarf_haschildren (die))
     return total;
+
+  struct what_info pwhat;
+  struct where_info pwhere;
+  DIE_what_where_size (die, &pwhat, &pwhere);
 
   Dwarf_Die child;
   if (dwarf_child (die, &child) == 0)
@@ -669,7 +579,7 @@ walk_children (Dwarf_Die *die, int indent)
 	      Dwarf_Word children_size = walk_children (&child, indent + 1);
 
 	      if (use_die)
-		output_die_end (&what, &where, children_size, indent);
+		output_die_end (&pwhat, &pwhere, &what, &where, children_size, indent);
 	      else
 		total += children_size;
 	    }
@@ -695,7 +605,7 @@ static void
 output_cu_end (struct what_info *what, struct where_info *where,
 	       Dwarf_Word children_size)
 {
-  output_die_end (what, where, children_size, 2);
+  output_die_end (NULL, NULL, what, where, children_size, 2);
 }
 
 static void
