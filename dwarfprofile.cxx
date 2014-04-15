@@ -582,9 +582,13 @@ output_die_end (struct what_info *what, struct where_info *where,
 		      printf ("%d %ld\n\n", what->line,
 			      (long)(where->size - children_size));
 #endif
+                      if (where->size < children_size) {
+                        fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n", where->size, children_size, where->tag, what->file, what->name);
+                      } else {
 		      register_file_span (what->file, what->name,
 					  what->line, where->col,
 					  where->size - children_size);
+                      }
 		    }
 		}
 	    }
@@ -598,9 +602,14 @@ output_die_end (struct what_info *what, struct where_info *where,
 	      printf ("calls=1 %d\n", what->line);
 	      printf ("%d %ld\n", where->line, (long)(where->size - children_size));
 #endif
+                      if (where->size < children_size) {
+                        fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n", where->size, children_size, where->tag, what->file, what->name);
+                      } else {
+
 	      register_file_span (what->file, what->name,
 				  what->line, where->col,
 				  where->size - children_size);
+                      }
 	    }
 	}
     }
