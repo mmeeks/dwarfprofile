@@ -19,6 +19,39 @@ openSUSE:
 Fedora:
 	sudo yum install elfutils-libelf-devel elfutils-libelf elfutils-libs elfutils-devel
 
+LO output format
+================
+
+This profile is *purely* the actual used text (no data). It indicates the
+cumulative total size (in bytes) and usage count for each component
+(function/method) in a heirachical structure.
+
+A method may have one or more lexical dwarf blocks within it, the
+storage in these blocks is credited to the enclosing scope (the
+method) but will increase the use count of the parent function
+incorrectly. Because of this small use counts may be off by one and
+alter the average excessively.
+
+The output is repeated at different depths. A | indicates that the
+line includes all the elements below that depth.
+
+For example:
+
+ Breakdown at depth 2
+
+Total Size    Count   Av. M Element
+  23214997  2001524   11                ssd1
+  23211463  2001366   11                 lo
+  17425180  1739325   10 |                master-suse
+   5786283   262041   22 |                android
+      2176      110   19                 ndk-toolchain
+      2176      110   19 |                src
+
+shows the beginning of a depth 2 output which means any elements below
+a depth of two are merged togetehr. In this case it shows that the
+ssd1/lo/master-suse source directory produced 17425180 bytes of code
+in 1739325 references
+
 
 Callgrind format
 ================

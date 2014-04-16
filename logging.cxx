@@ -123,9 +123,10 @@ struct FileSystemNode {
         for (ChildsType::iterator it = maChildren.begin();
              it != maChildren.end(); ++it)
         {
-            fprintf (stdout, "%10lu %8lu %s%s\n",
+            fprintf (stdout, "%10lu %8lu %4lu %s%s\n",
                      (unsigned long)(*it)->mnSize,
                      (*it)->useCount,
+                     (*it)->useCount > 0?(*it)->mnSize / (*it)->useCount:0,
                      pIndent,
                      (*it)->mpName);
             (*it)->dumpAtDepth (nDepth-1);
@@ -174,7 +175,7 @@ void dump_results()
             //int i = 12;
             fprintf (stdout,
                      "\n---\n\n Breakdown at depth %d\n\n"
-                     "Total Size    Count\n", i);
+                     "Total Size    Count   Av. M Element\n", i);
             FileSystemNode::gpRoot->dumpAtDepth(i);
         }
 }
