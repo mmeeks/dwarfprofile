@@ -30,6 +30,7 @@ struct FileSystemNode {
         if (mpParent)
             mpParent->maChildren.push_back(this);
         mnSize = 0;
+        useCount = 0;
     }
     ~FileSystemNode()
     {
@@ -84,10 +85,13 @@ struct FileSystemNode {
     // Payload
     size_t mnSize;
 
+    size_t useCount;
+
     // Size accumulated down the tree
     void addSize (size_t nSize)
     {
         mnSize += nSize;
+        useCount++;
         if (mpParent != NULL)
             mpParent->addSize (nSize);
     }
@@ -119,8 +123,11 @@ struct FileSystemNode {
         for (ChildsType::iterator it = maChildren.begin();
              it != maChildren.end(); ++it)
         {
-            fprintf (stdout, "%.6ld\t%s%s\n", (long)(*it)->mnSize,
-                     pIndent, (*it)->mpName);
+            fprintf (stdout, "%10lu %8lu %s%s\n",
+                     (unsigned long)(*it)->mnSize,
+                     (*it)->useCount,
+                     pIndent,
+                     (*it)->mpName);
             (*it)->dumpAtDepth (nDepth-1);
         }
     }
@@ -162,11 +169,14 @@ void dump_results()
 {
     FileSystemNode::gpRoot->sortChildren();
 
-    for (int i = 4; i <= 12; i+= 2)
-    {
-        fprintf (stdout, "\n---\n\n Breakdown at depth %d\n\n\n", i);
-        FileSystemNode::gpRoot->dumpAtDepth(i);
-    }
+    for (int i = 2; i <= 14; i+= 6)
+        {
+            //int i = 12;
+            fprintf (stdout,
+                     "\n---\n\n Breakdown at depth %d\n\n"
+                     "Total Size    Count\n", i);
+            FileSystemNode::gpRoot->dumpAtDepth(i);
+        }
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
