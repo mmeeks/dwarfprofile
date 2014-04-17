@@ -105,6 +105,10 @@ struct FileSystemNode {
 //            fprintf (stderr, "odd zero size at '%s' '%s'\n", pName, pFunc);
             return;
         }
+
+        if (pName == NULL) {
+            return; /* some DIE have no names */
+        }
         (void)line; (void)col; // later
         FileSystemNode *pNode = getNode(pName);
         if (pFunc)
