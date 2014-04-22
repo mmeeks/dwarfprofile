@@ -129,8 +129,8 @@ struct FileSystemNode {
         {
             fprintf (stdout, "%10lu %8lu %4lu %s%s\n",
                      (unsigned long)(*it)->mnSize,
-                     (*it)->useCount,
-                     (*it)->useCount > 0?(*it)->mnSize / (*it)->useCount:0,
+                     (unsigned long)(*it)->useCount,
+                     (unsigned long)((*it)->useCount > 0?(*it)->mnSize / (*it)->useCount:0),
                      pIndent,
                      (*it)->mpName);
             (*it)->dumpAtDepth (nDepth-1);

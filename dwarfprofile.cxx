@@ -501,7 +501,8 @@ output_die_end (struct what_info *pwhat, struct where_info *pwhere,
                      "confusion". */
                   if (where->size < children_size) {
                     fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n",
-                            where->size, children_size, where->tag, what->file, what->name);
+                            (long)where->size, (long)children_size,
+			    where->tag, what->file, what->name);
                   } else {
                     register_file_span (what->file, what->name,
                                         what->line, where->col,
@@ -516,7 +517,8 @@ output_die_end (struct what_info *pwhat, struct where_info *pwhere,
         {
           if (where->size < children_size) {
             fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n",
-                    where->size, children_size, where->tag, what->file, what->name);
+                    (long)where->size, (long)children_size,
+		    where->tag, what->file, what->name);
           } else {
             if (where->tag == DW_TAG_lexical_block) {
               /* use parents file and name for lexical blocks */
