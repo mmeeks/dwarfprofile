@@ -10,7 +10,11 @@
 #include <memory>
 #include <vector>
 #include <set>
+#include <functional>
+#include <string>
 #include <boost/shared_ptr.hpp>
+#include <boost/unordered_set.hpp>
+#include <boost/functional/hash.hpp>
 #include <algorithm>
 #include <malloc.h>
 #include <assert.h>
@@ -19,13 +23,26 @@
 
 typedef boost::shared_ptr< std::string > SharedString;
 
-static std::set< SharedString > aGlobalNames;
+class SharedStringHashEqual {
+  public:
+    size_t operator ()(const SharedString &str) const
+    {
+        return boost::hash< std::string >()(*str);
+    }
+    bool operator ()(const SharedString &a, const SharedString &b) const
+    {
+        return *a == *b;
+    }
+};
+typedef boost::unordered_set< SharedString, SharedStringHashEqual,
+                              SharedStringHashEqual> StringHash;
+static StringHash aGlobalNames;
 
 static void globalise_string( SharedString &out, const char *pStr)
 {
     SharedString str(new std::string(pStr)); // typical C++ / heinous waste
 
-    std::set< SharedString >::iterator it;
+    StringHash::const_iterator it;
     it = aGlobalNames.find (str);
     if (it == aGlobalNames.end())
     {
