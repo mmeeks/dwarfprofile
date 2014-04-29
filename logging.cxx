@@ -124,7 +124,7 @@ void register_address_span (struct what_info *what,
 
 void scan_addresses_to_fs_tree()
 {
-    fprintf (stderr, "do scan !\n");
+    fprintf (stderr, "* scan address space ...\n");
 
     AddressSet::const_iterator it = space.begin();
     AddressSet::const_iterator prev = space.begin();
@@ -135,22 +135,30 @@ void scan_addresses_to_fs_tree()
 
     for (;it != end; ++it)
     {
-        if (prev->mEnd_pc > it->mStart_pc)
-            fprintf (stderr, "overlapping dies\n");
+//        if (prev->mEnd_pc > it->mStart_pc)
+//            fprintf (stderr, "overlapping dies\n"); // these happen.
 
         assert (prev->mStart_pc < it->mStart_pc); // check sorted.
 
         size_t size = prev->mEnd_pc - prev->mStart_pc;
+        assert (size >= 0);
+
         if (prev->mEnd_pc > it->mStart_pc)
             size = it->mStart_pc - prev->mStart_pc;
+        else if (prev->mEnd_pc < it->mStart_pc)
+        {
+            size_t gap = it->mStart_pc - prev->mEnd_pc;
+            fs_register_size ("/gaps", "gap", 0, 0, gap);
+        }
 
-        fs_register_size (prev->mFile->c_str(), prev->mFunc->c_str(),
-                          prev->mLine, prev->mCol, size);
+        if (size > 0)
+            fs_register_size (prev->mFile->c_str(), prev->mFunc->c_str(),
+                              prev->mLine, prev->mCol, size);
 
         prev = it;
     }
     // loose the last element guy, but hey ...
-    fprintf (stderr, "total size from dies %ld\n",
+    fprintf (stderr, "check: total size from dies %ld\n",
              (long)(prev->mEnd_pc - space.begin()->mStart_pc));
 }
 

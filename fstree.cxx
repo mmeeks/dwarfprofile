@@ -175,13 +175,16 @@ void dump_results()
     FileSystemNode::gpRoot->sortChildren();
 
     for (int i = 2; i <= 14; i+= 6)
-        {
-            //int i = 12;
-            fprintf (stdout,
-                     "\n---\n\n Breakdown at depth %d\n\n"
-                     "Total Size    Count   Av. M Element\n", i);
-            FileSystemNode::gpRoot->dumpAtDepth(i);
-        }
+    {
+        //int i = 12;
+        fprintf (stdout,
+                 "\n---\n\n Breakdown at depth %d\n\n"
+                 "Total Size    Count   Av. M Element\n", i);
+        FileSystemNode::gpRoot->dumpAtDepth(i);
+    }
+
+    fprintf (stderr, "check: total size %ld\n",
+             (long)FileSystemNode::gpRoot->mnSize);
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */
