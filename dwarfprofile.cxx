@@ -556,7 +556,7 @@ handle_cu (Dwarf_Die *cu)
 static void
 output_module_begin (const char *name)
 {
-  fprintf (stderr, "process '%s'\n", name);
+  fprintf (stderr, "process '%s' ", name);
 }
 
 static void

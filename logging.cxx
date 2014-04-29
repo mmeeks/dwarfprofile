@@ -100,12 +100,18 @@ void recursive_splitting_insert (const AddressRecord &ins)
                          ins.mFile->c_str(), ins.mLine, (long)ins.mStart_pc, (long)ins.mEnd_pc);
 #endif
         }
+        else if (it->mEnd_pc == ins.mEnd_pc)
+        {
+            // ignore - describes the same range : take pot luck
+        }
         else
         {
+#if 0 // happens really a lot as we sub-divide large die's recursively ...
             fprintf (stderr, "Splitting identical start_pcs for two records !"
                      "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
                      it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
                      ins.mFile->c_str(), ins.mLine, (long)ins.mStart_pc, (long)ins.mEnd_pc);
+#endif
 
             // Nasty case ... lets let the smaller guy win for his
             // range: that makes some sense at least.
@@ -125,11 +131,12 @@ void recursive_splitting_insert (const AddressRecord &ins)
             space.erase(it);
 
             // chop ...
-            aLarge.mStart_pc = aSmall.mEnd_pc;
-            fprintf (stderr,"  split into two pieces: sizes 0x%lx and 0x%lx\n",
-                     aSmall.pcDifference(), aLarge.pcDifference());
+            aLarge.mStart_pc = aSmall.mEnd_pc + 1;
+//            fprintf (stderr,"  split into two pieces: sizes 0x%lx and 0x%lx\n",
+//                     aSmall.pcDifference(), aLarge.pcDifference());
             space.insert (aSmall);
-            recursive_splitting_insert (aLarge);
+            if (aLarge.mEnd_pc > aLarge.mStart_pc)
+                recursive_splitting_insert (aLarge);
         }
     }
     else // 95% common case
@@ -150,6 +157,10 @@ void register_address_span (struct what_info *what,
 //        fprintf (stderr, "what!?\n");
         return;
     }
+
+    static int nProgress = 0;
+    if ((++nProgress % 4096) == 0)
+        fprintf (stderr, ".");
 
     recursive_splitting_insert (
         AddressRecord (what->file, what->name,
