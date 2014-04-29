@@ -7,152 +7,64 @@
  * a De-Dwarfe'd C++ microcosm:
  */
 
+#include <memory>
 #include <vector>
+#include <set>
+#include <boost/shared_ptr.hpp>
 #include <algorithm>
 #include <malloc.h>
 #include <assert.h>
 #include <string.h>
 #include <logging.hxx>
 
-struct FileSystemNode;
-struct FileSystemNode {
-    char           *mpName;
-    FileSystemNode *mpParent;
+typedef boost::shared_ptr< std::string > SharedString;
 
-    typedef std::vector< FileSystemNode * > ChildsType; // Hamburg nostalgia
-    ChildsType      maChildren;
+static std::set< SharedString > aGlobalNames;
 
-    FileSystemNode (FileSystemNode *pParent,
-                    const char *pName, int nLength)
+static void globalise_string( SharedString &out, const char *pStr)
+{
+    SharedString str(new std::string(pStr)); // typical C++ / heinous waste
+
+    std::set< SharedString >::iterator it;
+    it = aGlobalNames.find (str);
+    if (it == aGlobalNames.end())
     {
-        mpName = strndup (pName, nLength);
-        mpParent = pParent;
-        if (mpParent)
-            mpParent->maChildren.push_back(this);
-        mnSize = 0;
-        useCount = 0;
+        aGlobalNames.insert (str);
+        out = str;
     }
-    ~FileSystemNode()
+    else
+        out = *it;
+}
+
+struct AddressRecord {
+    SharedString mFile, mFunc;
+    int mLine, mCol;
+    Dwarf_Addr mStart_pc;
+    Dwarf_Addr mEnd_pc;
+
+    AddressRecord( const char *file, const char *func,
+                   int line, int col,
+                   Dwarf_Addr start_pc, Dwarf_Addr end_pc ) :
+        mLine (line), mCol (col), mStart_pc (start_pc), mEnd_pc (end_pc)
     {
-        free (mpName);
-    }
-
-    static FileSystemNode *gpRoot;
-
-    static FileSystemNode *getNode (const char *pPath)
-    {
-        assert (pPath != NULL);
-        if (!gpRoot)
-            gpRoot = new FileSystemNode (NULL, "", 0);
-
-        FileSystemNode *pNode = gpRoot;
-        for (int last = 0, i = 0; pPath[i]; i++)
-        {
-            if (pPath[i] == '/')
-            {
-                if (i - last > 0)
-                {
-                    FileSystemNode *pChild;
-                    pChild = pNode->lookupNode(pPath + last, i - last);
-                    assert (pChild != NULL);
-                    pNode = pChild;
-                }
-                last = i + 1;
-            }
-        }
-        return pNode;
+        globalise_string (mFile, file);
+        globalise_string (mFunc, func);
     }
 
-    FileSystemNode *lookupNode (const char *pName, int nLength)
+    bool operator<(const AddressRecord &cmp) const
     {
-        // Un-mess-up relative paths etc. hoping that
-        // symlinks are kind to us.
-        if (!strncmp (pName, "..", nLength))
-            return mpParent ? mpParent : gpRoot;
-        if (!strncmp (pName, ".", nLength))
-            return this;
-
-        // slow as you like etc.
-        for (ChildsType::iterator it = maChildren.begin();
-             it != maChildren.end(); ++it)
-        {
-            if (!strncmp ((*it)->mpName, pName, nLength))
-                return *it;
-        }
-        return new FileSystemNode(this, pName, nLength);
+        return mStart_pc < cmp.mStart_pc;
     }
 
-    // Payload
-    size_t mnSize;
-
-    size_t useCount;
-
-    // Size accumulated down the tree
-    void addSize (size_t nSize)
+    bool operator==(const AddressRecord &cmp) const
     {
-        mnSize += nSize;
-        useCount++;
-        if (mpParent != NULL)
-            mpParent->addSize (nSize);
-    }
-
-    static void accumulate_size (const char *pName, const char *pFunc,
-                                 int line, int col, size_t size)
-    {
-        if (size == 0)
-        {
-// MJW - checkme - why is this zero so often ? ...
-//            fprintf (stderr, "odd zero size at '%s' '%s'\n", pName, pFunc);
-            return;
-        }
-
-        if (pName == NULL) {
-            return; /* some DIE have no names */
-        }
-        (void)line; (void)col; // later
-        FileSystemNode *pNode = getNode(pName);
-        if (pFunc)
-            pNode = pNode->lookupNode(pFunc, strlen(pFunc));
-        pNode->addSize (size);
-    }
-
-    void dumpAtDepth (int nDepth)
-    {
-        if (nDepth < 0)
-            return;
-        static const char aIndent[] = "|                ";
-        assert (nDepth < (int)sizeof (aIndent));
-        const char *pIndent = aIndent + nDepth;
-
-        for (ChildsType::iterator it = maChildren.begin();
-             it != maChildren.end(); ++it)
-        {
-            fprintf (stdout, "%10lu %8lu %4lu %s%s\n",
-                     (unsigned long)(*it)->mnSize,
-                     (unsigned long)(*it)->useCount,
-                     (unsigned long)((*it)->useCount > 0?(*it)->mnSize / (*it)->useCount:0),
-                     pIndent,
-                     (*it)->mpName);
-            (*it)->dumpAtDepth (nDepth-1);
-        }
-    }
-
-    static bool big_first (FileSystemNode *a, FileSystemNode *b)
-    {
-        return a->mnSize > b->mnSize;
-    }
-
-    void sortChildren()
-    {
-        std::sort (maChildren.begin(), maChildren.end(), big_first);
-
-        for (ChildsType::iterator it = maChildren.begin();
-             it != maChildren.end(); ++it)
-            (*it)->sortChildren();
+        return mStart_pc == cmp.mStart_pc;
     }
 };
 
-FileSystemNode *FileSystemNode::gpRoot = NULL;
+typedef std::set< AddressRecord > AddressSet;
+
+static AddressSet space;
 
 void
 register_compile_unit (const char *name, size_t size)
@@ -161,27 +73,85 @@ register_compile_unit (const char *name, size_t size)
              name, (long)size);
 }
 
-void register_file_span (const char *path, const char *func,
-                         int line, int col, size_t size)
+/*
+ * Build a layered series of spans
+ */
+void register_address_span (struct what_info *what,
+                            Dwarf_Addr start_pc, Dwarf_Addr end_pc)
 {
-    if (!path)
+//    fprintf (stderr, "start pc 0x%lx end pc 0x%lx\n", start_pc, end_pc);
+    if (!what || !what->file)
+    {
+//        fprintf (stderr, "what!?\n");
         return;
+    }
 
-    FileSystemNode::accumulate_size (path, func, line, col, size);
+    AddressRecord aRecord (what->file, what->name,
+                           what->line, what->col,
+                           start_pc, end_pc);
+
+    AddressSet::const_iterator it = space.find(aRecord);
+
+    if ( it != space.end())
+    {
+        assert (it->mStart_pc == start_pc);
+        if (it->mEnd_pc == end_pc &&
+            it->mLine == what->line &&
+            it->mCol == what->col)
+        {
+#if 0 // rather an interesting case here - the source of our grief initially I think.
+            if (*it->mFile != what->file)
+                fprintf (stderr, "Duplicate inline record start_pcs for two records !"
+                         "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
+                         it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
+                         what->file, what->line, (long)start_pc, (long)end_pc);
+#endif
+        }
+        else
+        {
+            fprintf (stderr, "Identical start_pcs for two records !"
+                     "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
+                     it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
+                     what->file, what->line, (long)start_pc, (long)end_pc);
+            abort();
+        }
+    }
+    else
+    {
+        space.insert (aRecord);
+    }
 }
 
-void dump_results()
+void scan_addresses_to_fs_tree()
 {
-    FileSystemNode::gpRoot->sortChildren();
+    fprintf (stderr, "do scan !\n");
 
-    for (int i = 2; i <= 14; i+= 6)
-        {
-            //int i = 12;
-            fprintf (stdout,
-                     "\n---\n\n Breakdown at depth %d\n\n"
-                     "Total Size    Count   Av. M Element\n", i);
-            FileSystemNode::gpRoot->dumpAtDepth(i);
-        }
+    AddressSet::const_iterator it = space.begin();
+    AddressSet::const_iterator prev = space.begin();
+    AddressSet::const_iterator end = space.end();
+
+    if (it != end)
+        ++it;
+
+    for (;it != end; ++it)
+    {
+        if (prev->mEnd_pc > it->mStart_pc)
+            fprintf (stderr, "overlapping dies\n");
+
+        assert (prev->mStart_pc < it->mStart_pc); // check sorted.
+
+        size_t size = prev->mEnd_pc - prev->mStart_pc;
+        if (prev->mEnd_pc > it->mStart_pc)
+            size = it->mStart_pc - prev->mStart_pc;
+
+        fs_register_size (prev->mFile->c_str(), prev->mFunc->c_str(),
+                          prev->mLine, prev->mCol, size);
+
+        prev = it;
+    }
+    // loose the last element guy, but hey ...
+    fprintf (stderr, "total size from dies %ld\n",
+             (long)(prev->mEnd_pc - space.begin()->mStart_pc));
 }
 
 /* vim:set shiftwidth=4 softtabstop=4 expandtab: */

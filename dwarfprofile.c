@@ -149,6 +149,7 @@ DIE_code_size (Dwarf_Die *die)
       off = dwarf_ranges (die, off, &base, &begin, &end);
       if (off > 0)
 	{
+	  fprintf (stderr, "die from 0x%lx->0x%lx\n", (long)begin, (long)end);
 	  size += (end - begin);
 	}
     }

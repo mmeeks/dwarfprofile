@@ -11,12 +11,12 @@ qa/multi-inline: qa/multi-inline.cxx qa/multi-inline1.cxx qa/multi-inline2.cxx q
 .PHONY:qa
 qa : qa/small qa/small-inline qa/small-lex qa/multi-inline
 
-dwarfprofile : dwarfprofile.cxx logging.cxx logging.hxx
-	g++ -Wall -I. -g `pkg-config --cflags --libs glib-2.0` \
-	    -O0 -ldw -o dwarfprofile dwarfprofile.cxx logging.cxx
+dwarfprofile : dwarfprofile.cxx logging.cxx fstree.cxx logging.hxx
+	g++ -Wall -I/opt/libreoffice/include -I. -g `pkg-config --cflags --libs glib-2.0` \
+	    -O0 -ldw -o dwarfprofile dwarfprofile.cxx fstree.cxx logging.cxx
 
 dwarfprofilec : dwarfprofile.c
-	gcc -Wall -I. -g `pkg-config --cflags --libs glib-2.0` \
+	gcc -Wall -I/opt/libreoffice/include -I. -g `pkg-config --cflags --libs glib-2.0` \
 	-ldw -o $@ $<
 
 test: dwarfprofile qa

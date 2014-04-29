@@ -16,10 +16,6 @@
 #include <stdio.h>
 #include <string.h>
 
-#include <dwarf.h>
-#include <elfutils/libdw.h>
-#include <elfutils/libdwfl.h>
-
 #include <logging.hxx>
 
 // Older versions of elfutils/libdw dwarf.h don't define this one.
@@ -175,6 +171,7 @@ DIE_decl_tag (Dwarf_Die *die, Dwarf_Die **decl)
   return dwarf_tag (die);
 }
 
+#if 0
 /* Returns a static constant string representation of the DIE tag.
    Returns NULL when unknown. Would be nice if libdw had this. */
 static const char *
@@ -209,45 +206,7 @@ TAG_name (int tag)
       return NULL;
     }
 }
-
-/* Note that DIE offsets are only unique for a specific Dwfl module or
-   file. We do keep them around for debugging (or to generate a name
-   for unknown code blobs), but a code definition cannot be identified
-   by just a DIE offset. And a code definition can be duplicated in
-   different Dwfl modules or files, so we like to identify them by
-   name/file/line/col whenever possible. */
-
-/* What code is being used? The tag will always be set. The name,
-   file, line and col can be unknown. This (file, line, col if known)
-   refer to the definition of the code location, not where or how much
-   of the code is used, see where_info. The die_off is only used for
-   debugging or when the name is unknown. */
-struct what_info
-{
-  int tag;
-  Dwarf_Off die_off;
-  const char *name;
-  char *file;
-  int line;
-  int col;
-};
-
-/* Where (and how) was the code used? The tag, file, line and col can
-   be identical to the what_info if the definition and use are in the
-   same spot. The tag will always be set, the file, line and col might
-   be missing. The size will always be non-zero and indicates how much
-   code is being used in this position (even if code uses the same
-   what_info it can use different amounts of the code). The die_off is
-   used for debugging (-d) and to see whether what == where.*/
-struct where_info
-{
-  int tag;
-  Dwarf_Off die_off;
-  char *file;
-  int line;
-  int col;
-  Dwarf_Word size;
-};
+#endif
 
 /* Returns the code size of the DIE and fills in the what and where
    info if the size is greater than zero. */
@@ -316,6 +275,33 @@ DIE_what_where_size (Dwarf_Die *die,
       where->size = size;
       what->file = escape_name (what_file);
       where->file = escape_name (where_file);
+
+      // Register these addresses cf. die-code-size etc.
+      {
+	Dwarf_Addr base;
+	Dwarf_Addr begin;
+	Dwarf_Addr end;
+	ptrdiff_t off = 0;
+	do
+	  {
+	    // Also handles lowpc plus highpc as special one range case.
+	    off = dwarf_ranges (die, off, &base, &begin, &end);
+	    if (off > 0)
+	      {
+		register_address_span (what, begin, end);
+	      }
+	  }
+	while (off > 0);
+
+	if (size == 0 && (dwarf_hasattr (die, DW_AT_entry_pc)
+			  || dwarf_hasattr (die, DW_AT_low_pc)) &&
+	    single_address_size > 0)
+	  {
+	    fprintf (stderr, "test me - size zero die: 0x%ld", (long) base);
+	    register_address_span (what, base, base + 1);
+	  }
+
+      }
     }
   else
     {
@@ -326,6 +312,7 @@ DIE_what_where_size (Dwarf_Die *die,
   return size;
 }
 
+#if 0
 /* Returns a hopefully unique identifier for what code is being used
    based on the definition tag, name, file, line and col if
    known. String has to be freed by caller. */
@@ -383,7 +370,6 @@ what_identifier_string (const struct what_info *what)
   return res;
 }
 
-#if 0
 /* Returns a string describing the location where a DIE was used.
    String has to be freed by caller. */
 static char *
@@ -429,26 +415,11 @@ where_string (const struct where_info *where)
 #endif
 
 /* We treat nested subprograms as "inlines", keep track of how deep we nest. */
-static int in_top_level_subprogram = 0;
+// static int in_top_level_subprogram = 0;
 
 static void
 output_die_begin (struct what_info *what, struct where_info *where, int indent)
 {
-    {
-      /* We report "top-level" functions (subprograms), but don't yet
-	 report any actual bytes here. First we will report all
-	 inlines (children) as calls in output_die_end. Then, also in
-	 output_die_end, we will report the actual bytes for the
-	 function (minus the children/inlined sizes). */
-      if (where->tag == DW_TAG_subprogram)
-	{
-	  /* Nested functions... bleah... */
-	  in_top_level_subprogram++;
-	  if (in_top_level_subprogram == 1)
-	    {
-	    }
-	}
-    }
 }
 
 static void
@@ -456,85 +427,6 @@ output_die_end (struct what_info *pwhat, struct where_info *pwhere,
                 struct what_info *what, struct where_info *where,
 		Dwarf_Word children_size, int indent)
 {
-  {
-    /* Only report on "real" code. */
-    if (what->tag == DW_TAG_compile_unit)
-      return;
-
-    {
-      if (where->tag != DW_TAG_subprogram
-          && in_top_level_subprogram == 0)
-        {
-          fprintf (stderr,
-                   "WARNING: Cannot happen! Embedded code outside"
-                   " a subprogram %s\n",
-                   what_identifier_string (what));
-          return;
-        }
-
-      if (where->tag == DW_TAG_subprogram)
-        {
-          in_top_level_subprogram--;
-          if (in_top_level_subprogram < 0)
-            {
-              fprintf (stderr,
-                       "WARNING: Cannot happen! Unbalanced subprogram %s\n",
-                       what_identifier_string (what));
-              return;
-            }
-
-          /* All other subprograms are treated like line inlined
-             subroutines below. */
-          if (in_top_level_subprogram == 0)
-            {
-              if (children_size == 0)
-                {
-                  /* No embedded code/calls reported since begin. */
-                  //	printf ("%d %ld\n\n", what->line, (long)where->size);
-                  register_file_span (what->file, what->name,
-                                      what->line, where->col,
-                                      where->size);
-                }
-              else
-                {
-                  /* Just report the file/function name again to avoid
-                     "confusion". */
-                  if (where->size < children_size) {
-                    fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n",
-                            (long)where->size, (long)children_size,
-			    where->tag, what->file, what->name);
-                  } else {
-                    register_file_span (what->file, what->name,
-                                        what->line, where->col,
-                                        where->size - children_size);
-                    }
-                }
-            }
-        }
-
-      if (where->tag != DW_TAG_subprogram
-          || in_top_level_subprogram > 0)
-        {
-          if (where->size < children_size) {
-            fprintf(stderr, "%ld < %ld tag:0x%x file:%s name:%s\n",
-                    (long)where->size, (long)children_size,
-		    where->tag, what->file, what->name);
-          } else {
-            if (where->tag == DW_TAG_lexical_block) {
-              /* use parents file and name for lexical blocks */
-              register_file_span (pwhat->file, pwhat->name,
-                                  what->line, where->col,
-                                  where->size - children_size);
-            } else {
-
-              register_file_span (what->file, what->name,
-                                  what->line, where->col,
-                                  where->size - children_size);
-            }
-          }
-        }
-    }
-  }
 }
 
 /* Walks all (code) children of the given DIE and returns the total
