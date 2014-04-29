@@ -42,6 +42,9 @@ struct AddressRecord {
     Dwarf_Addr mStart_pc;
     Dwarf_Addr mEnd_pc;
 
+    AddressRecord()
+    {
+    }
     AddressRecord( const char *file, const char *func,
                    int line, int col,
                    Dwarf_Addr start_pc, Dwarf_Addr end_pc ) :
@@ -60,6 +63,11 @@ struct AddressRecord {
     {
         return mStart_pc == cmp.mStart_pc;
     }
+
+    long pcDifference()
+    { // often not a true size
+        return mEnd_pc - mStart_pc;
+    }
 };
 
 typedef std::set< AddressRecord > AddressSet;
@@ -71,6 +79,63 @@ register_compile_unit (const char *name, size_t size)
 {
     fprintf (stdout, "compile-unit '%s', size: %ld\n",
              name, (long)size);
+}
+
+void recursive_splitting_insert (const AddressRecord &ins)
+{
+    AddressSet::const_iterator it = space.find(ins);
+
+    if ( it != space.end())
+    {
+        assert (it->mStart_pc == ins.mStart_pc);
+        if (it->mEnd_pc == ins.mEnd_pc &&
+            it->mLine == ins.mLine &&
+            it->mCol == ins.mCol)
+        {
+#if 0 // rather an interesting case here - the source of our grief initially I think.
+            if (*it->mFile != what->file)
+                fprintf (stderr, "Duplicate inline record start_pcs for two records !"
+                         "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
+                         it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
+                         ins.mFile->c_str(), ins.mLine, (long)ins.mStart_pc, (long)ins.mEnd_pc);
+#endif
+        }
+        else
+        {
+            fprintf (stderr, "Splitting identical start_pcs for two records !"
+                     "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
+                     it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
+                     ins.mFile->c_str(), ins.mLine, (long)ins.mStart_pc, (long)ins.mEnd_pc);
+
+            // Nasty case ... lets let the smaller guy win for his
+            // range: that makes some sense at least.
+            AddressRecord aSmall;
+            AddressRecord aLarge;
+
+            if (ins.mEnd_pc < it->mEnd_pc)
+            {
+                aSmall = ins;
+                aLarge = *it;
+            }
+            else
+            {
+                aLarge = ins;
+                aSmall = *it;
+            }
+            space.erase(it);
+
+            // chop ...
+            aLarge.mStart_pc = aSmall.mEnd_pc;
+            fprintf (stderr,"  split into two pieces: sizes 0x%lx and 0x%lx\n",
+                     aSmall.pcDifference(), aLarge.pcDifference());
+            space.insert (aSmall);
+            recursive_splitting_insert (aLarge);
+        }
+    }
+    else // 95% common case
+    {
+        space.insert (ins);
+    }
 }
 
 /*
@@ -86,40 +151,10 @@ void register_address_span (struct what_info *what,
         return;
     }
 
-    AddressRecord aRecord (what->file, what->name,
-                           what->line, what->col,
-                           start_pc, end_pc);
-
-    AddressSet::const_iterator it = space.find(aRecord);
-
-    if ( it != space.end())
-    {
-        assert (it->mStart_pc == start_pc);
-        if (it->mEnd_pc == end_pc &&
-            it->mLine == what->line &&
-            it->mCol == what->col)
-        {
-#if 0 // rather an interesting case here - the source of our grief initially I think.
-            if (*it->mFile != what->file)
-                fprintf (stderr, "Duplicate inline record start_pcs for two records !"
-                         "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
-                         it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
-                         what->file, what->line, (long)start_pc, (long)end_pc);
-#endif
-        }
-        else
-        {
-            fprintf (stderr, "Identical start_pcs for two records !"
-                     "'%s:%d' (0x%lx->0x%lx) vs '%s:%d' (0x%lx->0x%lx)\n",
-                     it->mFile->c_str(), it->mLine, (long)it->mStart_pc, (long)it->mEnd_pc,
-                     what->file, what->line, (long)start_pc, (long)end_pc);
-            abort();
-        }
-    }
-    else
-    {
-        space.insert (aRecord);
-    }
+    recursive_splitting_insert (
+        AddressRecord (what->file, what->name,
+                       what->line, what->col,
+                       start_pc, end_pc));
 }
 
 void scan_addresses_to_fs_tree()
@@ -148,6 +183,13 @@ void scan_addresses_to_fs_tree()
         else if (prev->mEnd_pc < it->mStart_pc)
         {
             size_t gap = it->mStart_pc - prev->mEnd_pc;
+            if (gap > 4)
+                fprintf (stderr, "unusual large gap between "
+                         "%s(%s) and %s(%s) 0x%lx -> 0x%lx (%ld bytes)\n",
+                         prev->mFile->c_str(), prev->mFunc->c_str(),
+                         it->mFile->c_str(), it->mFunc->c_str(),
+                         (long)prev->mEnd_pc, (long)prev->mStart_pc,
+                         (long)gap);
             fs_register_size ("/gaps", "gap", 0, 0, gap);
         }
 
